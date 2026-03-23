@@ -184,7 +184,7 @@ IT Undergraduate | AI Enthusiast | Research-Driven Developer
 
 ## 📜 Research Reference
 
-> Fareez, A. et al. (2024–2026). *"From Confusion to Clarity: IT Undergraduates, Industry Expectations, and the Role of Quality Internships."* — Unpublished Research Paper.
+Atheek Fareez, A. et al. (2024–2026). *"From Confusion to Clarity: IT Undergraduates, Industry Expectations, and the Role of Quality Internships."* — Unpublished Research Paper.
 
 ---
 
@@ -194,11 +194,3 @@ This project is for **educational and research purposes**.
 © 2024–2026 Atheek Fareez. All rights reserved.
 
 ---
-
-<div align="center">
-
-**⭐ If this project helped you, please give it a star on GitHub!**
-
-*Built with ❤️ by Atheek Fareez*
-
-</div>
