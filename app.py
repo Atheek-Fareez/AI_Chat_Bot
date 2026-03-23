@@ -15,6 +15,7 @@ import re
 import socket
 import qrcode
 import io
+import os
 import base64
 
 # ── PAGE CONFIG ──────────────────────────────────────────────
@@ -26,7 +27,7 @@ st.set_page_config(
 
 # ── GEMINI CLIENT ────────────────────────────────────────────
 # Paste your Gemini API key below ↓
-client = genai.Client(api_key="AIzaSyCt-Es5RnPB7dFhq2OUrJzoLJTVNnAEFsw")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # ── FULL PAGE CSS + BUILT-IN IT BACKGROUND ───────────────────
