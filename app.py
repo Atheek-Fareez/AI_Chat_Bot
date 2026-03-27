@@ -366,7 +366,7 @@ with st.sidebar:
       <span class="s-pill ds">📊 Data Science</span>
       <span class="s-pill cs">🔐 Cyber Security</span>
       <span class="s-pill net">🌐 CS &amp; Networks</span>
-      <span class="s-pill im">📱 Info Management</span>
+      <span class="s-pill im">📱 Intractive Media</span>
       <span class="s-pill ise">⚙️ IS Engineering</span>
     </div>
     """, unsafe_allow_html=True)
@@ -446,7 +446,7 @@ with st.sidebar:
     st.markdown("""
     <div class="sidebar-footer">
       Gemini 2.5 Flash · Research 2024–2026<br>
-      Made with ❤️ by <strong>Atheek Fareez</strong>
+      Made by <strong>Atheek Fareez</strong>
     </div>
     """, unsafe_allow_html=True)
 
