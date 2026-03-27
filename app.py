@@ -17,7 +17,8 @@ import qrcode
 import io
 import base64
 import time
-from datetime import datetime, timedelta
+import os
+from datetime import datetime
 
 # ── PAGE CONFIG ──────────────────────────────────────────────
 st.set_page_config(
@@ -27,7 +28,7 @@ st.set_page_config(
 )
 
 # ── GEMINI CLIENT ────────────────────────────────────────────
-client = genai.Client(api_key="PASTE_YOUR_API_KEY_HERE")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # ── HELPERS ──────────────────────────────────────────────────
@@ -74,10 +75,8 @@ Your job is to help IT students understand:
 - Career roadmaps and practical guidance
 - Common challenges IT students face and how to overcome them
 
-═══════════════════════════════════════════════
 KNOWLEDGE BASE (use ONLY this):
 {paper_text}
-═══════════════════════════════════════════════
 
 STRICT RULES:
 1. Answer ONLY from the research paper above.
@@ -85,15 +84,12 @@ STRICT RULES:
 3. Do NOT invent facts, statistics, or advice not found in the paper.
 
 RESPONSE FORMAT:
-- If question is RELATED to the research → give a clear, helpful answer.
-  • Use simple English a first-year student can understand.
-  • Use bullet points when listing steps or skills.
-  • Be warm, supportive, and practical.
-  • Keep it concise — avoid lengthy essays.
-
-- If question is OUTSIDE the research scope → reply EXACTLY:
+- If question is RELATED to the research give a clear, helpful answer.
+  Use simple English. Use bullet points. Be warm and practical.
+  Keep it concise.
+- If question is OUTSIDE the research scope reply EXACTLY:
   "I'm sorry, I don't have information about that yet.
-  But I will definitely let you know once I learn about it 😊"
+  But I will definitely let you know once I learn about it"
 
 TONE: Friendly mentor. Encouraging. Clear. Student-focused.
 """.strip()
@@ -107,7 +103,7 @@ def ask_gemini(system_prompt: str, conversation_history: list) -> str:
     return response.text
 
 
-# ── SESSION STATE ───────────────────────────────────────────────────────────
+# ── SESSION STATE ─────────────────────────────────────────────
 if "chat_history"   not in st.session_state: st.session_state.chat_history   = []
 if "gemini_history" not in st.session_state: st.session_state.gemini_history = []
 if "input_key"      not in st.session_state: st.session_state.input_key      = 0
@@ -118,16 +114,16 @@ if "session_mins"   not in st.session_state: st.session_state.session_mins   = 3
 if "session_active" not in st.session_state: st.session_state.session_active = True
 
 
-# ── CSS ───────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# CSS — clean, no overflow:hidden on html/body
+# ══════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Oxanium:wght@600;700;800&display=swap');
 
-  html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-  }
+  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-  /* ── page background ── */
+  /* ── background ── */
   .stApp {
     background-color: #f0f4ff;
     background-image:
@@ -143,8 +139,7 @@ st.markdown("""
   .stApp::before {
     content: "";
     position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 3px;
+    top: 0; left: 0; right: 0; height: 3px;
     background: linear-gradient(90deg, #7c3aed, #06b6d4, #10b981, #f59e0b, #7c3aed);
     background-size: 300% 100%;
     animation: topbar 5s linear infinite;
@@ -157,356 +152,183 @@ st.markdown("""
 
   /* ── hide streamlit chrome ── */
   #MainMenu, footer, header { visibility: hidden; }
-  .block-container {
-    padding: 0 !important;
-    max-width: 100% !important;
-  }
+  .block-container { padding: 0 !important; max-width: 100% !important; }
 
   /* ── sidebar ── */
   [data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.88) !important;
+    background: rgba(255,255,255,0.92) !important;
     border-right: 1.5px solid rgba(124,58,237,0.12) !important;
     backdrop-filter: blur(12px);
   }
-  [data-testid="stSidebar"] .block-container {
-    padding: 1.5rem 1rem !important;
-  }
+  [data-testid="stSidebar"] .block-container { padding: 1.5rem 1rem !important; }
 
-  /* ── sidebar title ── */
+  /* sidebar text */
   .sidebar-title {
-    font-family: 'Oxanium', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 800;
-    background: linear-gradient(90deg, #7c3aed, #0891b2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 0.2rem;
+    font-family: 'Oxanium', sans-serif; font-size: 1.1rem; font-weight: 800;
+    background: linear-gradient(90deg,#7c3aed,#0891b2);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 0.2rem;
   }
-  .sidebar-by {
-    font-size: 0.75rem;
-    color: #0891b2;
-    font-weight: 600;
-    margin-bottom: 1.2rem;
-    letter-spacing: 0.03em;
-  }
-  .sidebar-desc {
-    font-size: 0.78rem;
-    color: #475569;
-    line-height: 1.6;
-    margin-bottom: 1.2rem;
-  }
+  .sidebar-by  { font-size: 0.75rem; color:#0891b2; font-weight:600; margin-bottom:1.2rem; }
+  .sidebar-desc{ font-size: 0.78rem; color:#475569; line-height:1.6; margin-bottom:1.2rem; }
 
-  /* ── IT pills in sidebar ── */
-  .pill-wrap { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1.2rem; }
-  .s-pill {
-    padding: 5px 12px;
-    border-radius: 8px;
-    font-size: 0.73rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    border: 1.5px solid;
-  }
-  .s-pill.ai  { background: rgba(237,233,254,0.9); border-color: rgba(124,58,237,0.35); color: #6d28d9; }
-  .s-pill.se  { background: rgba(219,234,254,0.9); border-color: rgba(37,99,235,0.35);  color: #1d4ed8; }
-  .s-pill.ds  { background: rgba(209,250,229,0.9); border-color: rgba(5,150,105,0.35);  color: #047857; }
-  .s-pill.cs  { background: rgba(254,243,199,0.9); border-color: rgba(180,83,9,0.35);   color: #b45309; }
-  .s-pill.net { background: rgba(252,231,243,0.9); border-color: rgba(190,24,93,0.35);  color: #be185d; }
-  .s-pill.im  { background: rgba(204,251,241,0.9); border-color: rgba(15,118,110,0.35); color: #0f766e; }
-  .s-pill.ise { background: rgba(255,237,213,0.9); border-color: rgba(194,65,12,0.35);  color: #c2410c; }
+  /* IT pills */
+  .pill-wrap { display:flex; flex-direction:column; gap:6px; margin-bottom:1.2rem; }
+  .s-pill { padding:5px 12px; border-radius:8px; font-size:0.73rem; font-weight:600; border:1.5px solid; }
+  .s-pill.ai  { background:rgba(237,233,254,.9); border-color:rgba(124,58,237,.35); color:#6d28d9; }
+  .s-pill.se  { background:rgba(219,234,254,.9); border-color:rgba(37,99,235,.35);  color:#1d4ed8; }
+  .s-pill.ds  { background:rgba(209,250,229,.9); border-color:rgba(5,150,105,.35);  color:#047857; }
+  .s-pill.cs  { background:rgba(254,243,199,.9); border-color:rgba(180,83,9,.35);   color:#b45309; }
+  .s-pill.net { background:rgba(252,231,243,.9); border-color:rgba(190,24,93,.35);  color:#be185d; }
+  .s-pill.im  { background:rgba(204,251,241,.9); border-color:rgba(15,118,110,.35); color:#0f766e; }
+  .s-pill.ise { background:rgba(255,237,213,.9); border-color:rgba(194,65,12,.35);  color:#c2410c; }
 
-  /* ── access card in sidebar ── */
-  .acc-card {
-    background: rgba(237,233,254,0.60);
-    border: 1.5px solid rgba(124,58,237,0.20);
-    border-radius: 12px;
-    padding: 0.8rem;
-    margin-bottom: 1rem;
-  }
-  .acc-title {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #6d28d9;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    margin-bottom: 0.5rem;
-  }
-  .acc-link {
-    display: block;
-    padding: 4px 10px;
-    border-radius: 7px;
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-decoration: none !important;
-    margin-bottom: 4px;
-    transition: all 0.18s;
-  }
-  .acc-link.local { background: rgba(237,233,254,0.9); color: #6d28d9 !important; border: 1px solid rgba(124,58,237,0.25); }
-  .acc-link.net   { background: rgba(224,242,254,0.9); color: #0369a1 !important; border: 1px solid rgba(8,145,178,0.30); }
-  .acc-link:hover { filter: brightness(0.94); transform: translateX(2px); }
+  /* access card */
+  .acc-card { background:rgba(237,233,254,.6); border:1.5px solid rgba(124,58,237,.2); border-radius:12px; padding:.8rem; margin-bottom:1rem; }
+  .acc-title { font-size:.68rem; font-weight:700; color:#6d28d9; letter-spacing:.09em; text-transform:uppercase; margin-bottom:.5rem; }
+  .acc-link  { display:block; padding:4px 10px; border-radius:7px; font-size:.76rem; font-weight:600; text-decoration:none !important; margin-bottom:4px; transition:all .18s; }
+  .acc-link.local { background:rgba(237,233,254,.9); color:#6d28d9 !important; border:1px solid rgba(124,58,237,.25); }
+  .acc-link.net   { background:rgba(224,242,254,.9); color:#0369a1 !important; border:1px solid rgba(8,145,178,.30); }
+  .acc-link:hover { filter:brightness(.94); transform:translateX(2px); }
 
-  /* ── main chat area ── */
-  .chat-wrapper {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    max-width: 820px;
-    margin: 0 auto;
-    padding: 0 1rem;
-  }
+  /* timer */
+  .timer-box { background:rgba(237,233,254,.85); border:1.5px solid rgba(124,58,237,.25); border-radius:12px; padding:.7rem .9rem; margin-bottom:.8rem; }
+  .timer-label{ font-size:.67rem; font-weight:700; color:#6d28d9; letter-spacing:.09em; text-transform:uppercase; margin-bottom:4px; }
+  .timer-val  { font-family:'Oxanium',sans-serif; font-size:1.4rem; font-weight:800; color:#7c3aed; line-height:1; }
+  .timer-val.warn { color:#d97706; }
+  .timer-val.expd { color:#dc2626; }
+  .timer-sub  { font-size:.68rem; color:#94a3b8; margin-top:3px; }
+  .expired-banner { background:rgba(254,226,226,.95); border:1.5px solid rgba(239,68,68,.4); border-radius:10px; padding:.7rem 1rem; color:#991b1b; font-size:.82rem; font-weight:600; text-align:center; margin-bottom:.8rem; }
+  .sidebar-footer { font-size:.68rem; color:#94a3b8; text-align:center; margin-top:1.5rem; line-height:1.6; }
+  .sidebar-footer strong { color:#7c3aed; }
 
-  /* ── chat header ── */
+  /* ══════════════════════════════════════════
+     MAIN CHAT LAYOUT
+     The key: use position:fixed for the input
+     bar so it's ALWAYS at the bottom of the
+     viewport regardless of content height.
+     Give the chat area padding-bottom so the
+     last message is never hidden behind it.
+  ══════════════════════════════════════════ */
+
+  /* chat header — fixed at top of content area */
   .chat-header {
-    padding: 1.2rem 0 0.8rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(240,244,255,0.96);
+    backdrop-filter: blur(10px);
     border-bottom: 1.5px solid rgba(99,102,241,0.12);
+    padding: 0.9rem 1rem 0.7rem;
     margin-bottom: 0.5rem;
-    flex-shrink: 0;
   }
   .chat-header-title {
     font-family: 'Oxanium', sans-serif;
-    font-size: 1.25rem;
-    font-weight: 800;
-    background: linear-gradient(90deg, #7c3aed, #0891b2, #059669);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 1.15rem; font-weight: 800;
+    background: linear-gradient(90deg,#7c3aed,#0891b2,#059669);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
-  .chat-header-sub {
-    font-size: 0.75rem;
-    color: #64748b;
-    font-weight: 500;
-    margin-top: 2px;
+  .chat-header-sub { font-size:.74rem; color:#64748b; margin-top:2px; }
+
+  /* ── THE KEY FIX: input bar truly fixed to viewport bottom ── */
+  .pinned-input {
+    position: fixed !important;
+    bottom: 0 !important;
+    /* offset left to account for the sidebar (~21rem wide) */
+    left: 21rem !important;
+    right: 0 !important;
+    z-index: 9000 !important;
+    background: rgba(240,244,255,0.98) !important;
+    backdrop-filter: blur(16px) !important;
+    border-top: 1.5px solid rgba(99,102,241,0.14) !important;
+    padding: 0.65rem 2rem 0.9rem !important;
+    box-shadow: 0 -4px 20px rgba(99,102,241,0.08) !important;
+  }
+  .pinned-input-inner {
+    max-width: 780px;
+    margin: 0 auto;
   }
 
-  /* ── scrollable messages area ── */
-  .messages-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem 0 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    min-height: 0;
+  /* give the whole page enough bottom padding so the last
+     message is never covered by the pinned input bar */
+  .main-content-pad {
+    padding-bottom: 130px;
+    max-width: 780px;
+    margin: 0 auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
-  /* ── individual chat bubbles ── */
-  .msg-row {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    animation: fadein 0.3s ease;
-  }
-  @keyframes fadein { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+  /* ── chat bubbles ── */
+  .msg-row { display:flex; gap:10px; align-items:flex-start; animation:fadein .3s ease; margin-bottom:.6rem; }
+  @keyframes fadein { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+  .msg-row.user { flex-direction:row-reverse; }
+  .msg-row.bot  { flex-direction:row; }
 
-  .msg-row.user  { flex-direction: row-reverse; }
-  .msg-row.bot   { flex-direction: row; }
+  .avatar { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; font-weight:700; }
+  .avatar.user-av { background:linear-gradient(135deg,#7c3aed,#0891b2); color:#fff; }
+  .avatar.bot-av  { background:linear-gradient(135deg,#ecfdf5,#d1fae5); color:#047857; border:1.5px solid rgba(5,150,105,.25); }
+  .msg-name { font-size:.65rem; font-weight:600; color:#94a3b8; text-align:center; margin-top:3px; }
 
-  .avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    flex-shrink: 0;
-    font-weight: 700;
-  }
-  .avatar.user-av { background: linear-gradient(135deg,#7c3aed,#0891b2); color:#fff; }
-  .avatar.bot-av  { background: linear-gradient(135deg,#ecfdf5,#d1fae5); color:#047857; border: 1.5px solid rgba(5,150,105,0.25); }
-
-  .bubble {
-    max-width: 78%;
-    padding: 0.75rem 1.1rem;
-    border-radius: 18px;
-    font-size: 0.91rem;
-    line-height: 1.65;
-    white-space: pre-wrap;
-  }
-  .bubble.user-bubble {
-    background: linear-gradient(135deg, #7c3aed, #0891b2);
-    color: #ffffff;
-    border-radius: 18px 4px 18px 18px;
-    box-shadow: 0 2px 12px rgba(124,58,237,0.25);
-  }
-  .bubble.bot-bubble {
-    background: rgba(255,255,255,0.92);
-    color: #1e293b;
-    border: 1.5px solid rgba(99,102,241,0.15);
-    border-radius: 4px 18px 18px 18px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-  }
-  .bubble.bot-bubble p  { margin: 0 0 0.3rem 0; }
+  .bubble { max-width:78%; padding:.75rem 1.1rem; border-radius:18px; font-size:.91rem; line-height:1.65; white-space:pre-wrap; }
+  .bubble.user-bubble { background:linear-gradient(135deg,#7c3aed,#0891b2); color:#fff; border-radius:18px 4px 18px 18px; box-shadow:0 2px 12px rgba(124,58,237,.25); }
+  .bubble.bot-bubble  { background:rgba(255,255,255,.92); color:#1e293b; border:1.5px solid rgba(99,102,241,.15); border-radius:4px 18px 18px 18px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .bubble.bot-bubble p  { margin:0 0 .3rem 0; }
   .bubble.bot-bubble ul,
-  .bubble.bot-bubble ol { margin: 0.1rem 0 0.3rem 1.1rem; padding:0; }
-  .bubble.bot-bubble li { margin-bottom: 0.1rem; }
+  .bubble.bot-bubble ol { margin:.1rem 0 .3rem 1.1rem; padding:0; }
+  .bubble.bot-bubble li { margin-bottom:.1rem; }
 
-  /* ── name label under avatar ── */
-  .msg-name {
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: #94a3b8;
-    text-align: center;
-    margin-top: 3px;
-    letter-spacing: 0.04em;
-  }
+  /* welcome card */
+  .welcome-card { background:rgba(255,255,255,.82); border:1.5px solid rgba(124,58,237,.18); border-top:3px solid rgba(124,58,237,.5); border-radius:20px; padding:2rem; text-align:center; margin:1.5rem 0; box-shadow:0 4px 24px rgba(99,102,241,.10); }
+  .welcome-icon  { font-size:2.5rem; display:block; margin-bottom:.4rem; }
+  .welcome-title { font-family:'Oxanium',sans-serif; font-size:1.5rem; font-weight:800; background:linear-gradient(90deg,#7c3aed,#0891b2,#059669); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:.2rem; }
+  .welcome-by    { font-size:.85rem; color:#0891b2; font-weight:700; margin-bottom:.7rem; }
+  .welcome-desc  { font-size:.83rem; color:#475569; line-height:1.65; margin-bottom:.9rem; }
+  .suggestions   { display:flex; flex-wrap:wrap; gap:7px; justify-content:center; }
+  .chip { background:rgba(237,233,254,.88); border:1.5px solid rgba(124,58,237,.25); border-radius:999px; padding:5px 14px; font-size:.74rem; font-weight:600; color:#6d28d9; }
 
-  /* ── welcome card (shown when no messages) ── */
-  .welcome-card {
-    background: rgba(255,255,255,0.80);
-    border: 1.5px solid rgba(124,58,237,0.18);
-    border-top: 3px solid rgba(124,58,237,0.50);
-    border-radius: 20px;
-    padding: 2rem;
-    text-align: center;
-    margin: 2rem 0;
-    box-shadow: 0 4px 24px rgba(99,102,241,0.10);
-  }
-  .welcome-icon { font-size: 2.8rem; display: block; margin-bottom: 0.5rem; }
-  .welcome-title {
-    font-family: 'Oxanium', sans-serif;
-    font-size: 1.6rem;
-    font-weight: 800;
-    background: linear-gradient(90deg, #7c3aed, #0891b2, #059669);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 0.2rem;
-  }
-  .welcome-by   { font-size: 0.88rem; color: #0891b2; font-weight: 700; margin-bottom: 0.8rem; }
-  .welcome-desc { font-size: 0.85rem; color: #475569; line-height: 1.65; margin-bottom: 1rem; }
+  /* thinking dots */
+  .thinking { display:flex; gap:5px; padding:.65rem 1rem; background:rgba(255,255,255,.88); border:1.5px solid rgba(99,102,241,.14); border-radius:4px 18px 18px 18px; width:fit-content; }
+  .dot { width:7px; height:7px; border-radius:50%; background:#7c3aed; animation:bounce 1.2s infinite ease-in-out; }
+  .dot:nth-child(2){ animation-delay:.2s; }
+  .dot:nth-child(3){ animation-delay:.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:scale(.7);opacity:.5} 40%{transform:scale(1.1);opacity:1} }
 
-  /* ── suggestion chips ── */
-  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-  .chip {
-    background: rgba(237,233,254,0.85);
-    border: 1.5px solid rgba(124,58,237,0.25);
-    border-radius: 999px;
-    padding: 6px 16px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #6d28d9;
-    cursor: pointer;
-  }
-
-  /* ── fixed bottom input bar ── */
-  .input-bar-wrap {
-    flex-shrink: 0;
-    padding: 0.7rem 0 1rem;
-    border-top: 1.5px solid rgba(99,102,241,0.12);
-    background: rgba(240,244,255,0.85);
-    backdrop-filter: blur(10px);
-  }
-
-  /* override streamlit textarea inside input bar */
+  /* textarea */
   .stTextArea textarea {
     background-color: #ffffff !important;
-    border: 1.5px solid rgba(99,102,241,0.28) !important;
+    border: 1.5px solid rgba(99,102,241,.28) !important;
     border-radius: 14px !important;
     color: #1e293b !important;
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.93rem !important;
+    font-size: .93rem !important;
     font-weight: 400 !important;
     resize: none !important;
     caret-color: #7c3aed !important;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.06) !important;
-    padding: 0.75rem 1rem !important;
+    box-shadow: 0 1px 6px rgba(0,0,0,.06) !important;
+    padding: .7rem 1rem !important;
   }
-  .stTextArea textarea::placeholder { color: rgba(100,116,139,0.50) !important; }
+  .stTextArea textarea::placeholder { color:rgba(100,116,139,.50) !important; }
   .stTextArea textarea:focus {
-    border-color: rgba(124,58,237,0.55) !important;
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.10) !important;
+    border-color: rgba(124,58,237,.55) !important;
+    box-shadow: 0 0 0 3px rgba(124,58,237,.10) !important;
     outline: none !important;
   }
 
   /* send button */
   .stButton > button {
-    background: linear-gradient(135deg, #7c3aed, #0891b2) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 14px !important;
-    padding: 0.72rem 1.8rem !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 0.90rem !important;
-    font-weight: 700 !important;
-    width: 100% !important;
-    height: 100% !important;
-    transition: all 0.22s !important;
-    box-shadow: 0 3px 14px rgba(124,58,237,0.28) !important;
-    letter-spacing: 0.03em !important;
+    background: linear-gradient(135deg,#7c3aed,#0891b2) !important;
+    color: #fff !important; border: none !important;
+    border-radius: 14px !important; padding: .70rem 1.6rem !important;
+    font-family: 'Inter', sans-serif !important; font-size: .90rem !important;
+    font-weight: 700 !important; width: 100% !important;
+    transition: all .22s !important; box-shadow: 0 3px 14px rgba(124,58,237,.28) !important;
   }
-  .stButton > button:hover {
-    background: linear-gradient(135deg, #6d28d9, #0369a1) !important;
-    box-shadow: 0 5px 20px rgba(124,58,237,0.40) !important;
-    transform: translateY(-1px) !important;
-  }
-  .stButton > button:active { transform: translateY(0) !important; }
+  .stButton > button:hover { background:linear-gradient(135deg,#6d28d9,#0369a1) !important; transform:translateY(-1px) !important; }
+  .stButton > button:active { transform:translateY(0) !important; }
 
   /* error / warning */
-  .msg-warn {
-    background: rgba(255,251,235,0.95);
-    border: 1.5px solid rgba(245,158,11,0.40);
-    border-radius: 10px;
-    padding: 0.65rem 1rem;
-    color: #92400e;
-    font-size: 0.84rem;
-    font-weight: 600;
-    margin-top: 0.4rem;
-  }
-
-  /* thinking indicator */
-  .thinking {
-    display: flex;
-    gap: 5px;
-    padding: 0.7rem 1rem;
-    background: rgba(255,255,255,0.85);
-    border: 1.5px solid rgba(99,102,241,0.14);
-    border-radius: 4px 18px 18px 18px;
-    width: fit-content;
-  }
-  .dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #7c3aed;
-    animation: bounce 1.2s infinite ease-in-out;
-  }
-  .dot:nth-child(2) { animation-delay: 0.2s; }
-  .dot:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes bounce {
-    0%,80%,100% { transform: scale(0.7); opacity:0.5; }
-    40%          { transform: scale(1.1); opacity:1; }
-  }
-
-  /* -- session timer -- */
-  .timer-box {
-    background: rgba(237,233,254,0.85);
-    border: 1.5px solid rgba(124,58,237,0.25);
-    border-radius: 12px;
-    padding: 0.7rem 0.9rem;
-    margin-bottom: 0.8rem;
-  }
-  .timer-label {
-    font-size: 0.67rem; font-weight: 700; color: #6d28d9;
-    letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 4px;
-  }
-  .timer-val { font-family: "Oxanium",sans-serif; font-size: 1.4rem; font-weight: 800; color: #7c3aed; line-height:1; }
-  .timer-val.warn { color: #d97706; }
-  .timer-val.expd { color: #dc2626; }
-  .timer-sub { font-size: 0.68rem; color: #94a3b8; margin-top: 3px; }
-  .expired-banner {
-    background: rgba(254,226,226,0.95); border: 1.5px solid rgba(239,68,68,0.40);
-    border-radius: 10px; padding: 0.7rem 1rem; color: #991b1b;
-    font-size: 0.82rem; font-weight: 600; text-align: center; margin-bottom: 0.8rem;
-  }
-  /* sidebar footer */
-  .sidebar-footer {
-    font-size: 0.68rem;
-    color: #94a3b8;
-    text-align: center;
-    margin-top: 1.5rem;
-    line-height: 1.6;
-  }
-  .sidebar-footer strong { color: #7c3aed; }
+  .msg-warn { background:rgba(255,251,235,.95); border:1.5px solid rgba(245,158,11,.4); border-radius:10px; padding:.65rem 1rem; color:#92400e; font-size:.84rem; font-weight:600; margin:.4rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -514,12 +336,10 @@ st.markdown("""
 # ── LOAD DATA ─────────────────────────────────────────────────
 paper_text = load_knowledge_base("research_paper_cleaned.txt")
 if paper_text is None:
-    st.error("⚠️ research_paper_cleaned.txt not found. Place it in the same folder as app.py.")
+    st.error("research_paper_cleaned.txt not found. Place it in the same folder as app.py.")
     st.stop()
-
 system_prompt = build_system_prompt(paper_text)
 
-# ── NETWORK / QR ──────────────────────────────────────────────
 local_ip    = get_local_ip()
 network_url = f"http://{local_ip}:8501"
 qr_src      = make_qr_base64(network_url)
@@ -530,20 +350,16 @@ qr_src      = make_qr_base64(network_url)
 # ══════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("""
-    <div class="sidebar-title">🎓 IT Career Guidance</div>
-    <div class="sidebar-by">✦ with Atheek Fareez ✦</div>
+    <div class="sidebar-title">IT Career Guidance</div>
+    <div class="sidebar-by">with Atheek Fareez</div>
     <div class="sidebar-desc">
       Your AI mentor powered by real research —
       <em>"From Confusion to Clarity"</em> (2024–2026).
-      Ask anything about IT careers, skills &amp; internships.
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="font-size:0.70rem; font-weight:700; color:#6d28d9;
-                letter-spacing:0.09em; text-transform:uppercase; margin-bottom:6px;">
-      🎯 IT Fields Covered
-    </div>
+    <div style="font-size:.70rem;font-weight:700;color:#6d28d9;letter-spacing:.09em;text-transform:uppercase;margin-bottom:6px;">IT Fields Covered</div>
     <div class="pill-wrap">
       <span class="s-pill ai">🤖 AI / Machine Learning</span>
       <span class="s-pill se">💻 Software Engineering</span>
@@ -557,57 +373,54 @@ with st.sidebar:
 
     st.markdown(f"""
     <div class="acc-card">
-      <div class="acc-title">🔗 Access Links</div>
+      <div class="acc-title">Access Links</div>
       <a class="acc-link local" href="http://localhost:8501" target="_blank">💻 Localhost</a>
       <a class="acc-link net"   href="{network_url}"         target="_blank">📱 Network / Mobile</a>
-      <div style="text-align:center; margin-top:8px;">
-        <img src="{qr_src}" width="90" style="border-radius:8px;"/>
-        <div style="font-size:0.62rem; color:#94a3b8; margin-top:3px; font-weight:600;">SCAN TO OPEN</div>
+      <div style="text-align:center;margin-top:8px;">
+        <img src="{qr_src}" width="88" style="border-radius:8px;"/>
+        <div style="font-size:.62rem;color:#94a3b8;margin-top:3px;font-weight:600;">SCAN TO OPEN</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # -- Session timer --------------------------------------------------
+    # ── Session timer ─────────────────────────────────────────
     elapsed   = datetime.now() - st.session_state.session_start
     limit_sec = st.session_state.session_mins * 60
     remain    = max(0, limit_sec - int(elapsed.total_seconds()))
     mins_left = remain // 60
     secs_left = remain % 60
     pct_used  = min(1.0, elapsed.total_seconds() / max(limit_sec, 1))
+    bar_w     = max(0, int((1 - pct_used) * 100))
 
     if remain == 0:
         st.session_state.session_active = False
         timer_cls  = "expd"
         timer_text = "EXPIRED"
+        bar_colour = "#dc2626"
     elif mins_left < 5:
         timer_cls  = "warn"
         timer_text = f"{mins_left:02d}:{secs_left:02d}"
+        bar_colour = "#d97706"
     else:
         timer_cls  = ""
         timer_text = f"{mins_left:02d}:{secs_left:02d}"
+        bar_colour = "#7c3aed"
 
-    bar_colour = "#dc2626" if remain == 0 else ("#d97706" if mins_left < 5 else "#7c3aed")
-    bar_w      = max(0, int((1 - pct_used) * 100))
-    qa_count   = len(st.session_state.chat_history) // 2
-
+    qa_count = len(st.session_state.chat_history) // 2
     st.markdown(f"""
     <div class="timer-box">
       <div class="timer-label">Session Memory Timer</div>
       <div class="timer-val {timer_cls}">{timer_text}</div>
-      <div style="background:rgba(0,0,0,0.08);border-radius:999px;height:5px;margin:6px 0;">
+      <div style="background:rgba(0,0,0,.08);border-radius:999px;height:5px;margin:6px 0;">
         <div style="background:{bar_colour};width:{bar_w}%;height:5px;border-radius:999px;"></div>
       </div>
-      <div class="timer-sub">Memory {st.session_state.session_mins} min · {qa_count} Q&amp;A pairs stored</div>
+      <div class="timer-sub">Memory {st.session_state.session_mins} min · {qa_count} Q&amp;A pairs</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div style="font-size:0.68rem;font-weight:700;color:#6d28d9;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Set Session Duration</div>', unsafe_allow_html=True)
-    new_mins = st.select_slider(
-        "session_duration",
-        options=[5, 10, 15, 20, 30, 45, 60, 90, 120],
-        value=st.session_state.session_mins,
-        label_visibility="collapsed",
-    )
+    st.markdown('<div style="font-size:.68rem;font-weight:700;color:#6d28d9;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;">Set Session Duration</div>', unsafe_allow_html=True)
+    new_mins = st.select_slider("dur", options=[5,10,15,20,30,45,60,90,120],
+                                value=st.session_state.session_mins, label_visibility="collapsed")
     if new_mins != st.session_state.session_mins:
         st.session_state.session_mins   = new_mins
         st.session_state.session_start  = datetime.now()
@@ -639,31 +452,29 @@ with st.sidebar:
 
 
 # ══════════════════════════════════════════════════════════════
-# MAIN CHAT AREA
+# MAIN AREA — header + scrollable content + PINNED input bar
 # ══════════════════════════════════════════════════════════════
-st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
 
-# ── Header ────────────────────────────────────────────────────
+# ── Sticky chat header ────────────────────────────────────────
 st.markdown("""
 <div class="chat-header">
   <div class="chat-header-title">🎓 IT Career Guidance</div>
-  <div class="chat-header-sub">Powered by Gemini 2.5 Flash · Research Paper 2024–2026 · by Atheek Fareez</div>
+  <div class="chat-header-sub">Gemini 2.5 Flash · Research 2024–2026 · by Atheek Fareez</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Messages area ─────────────────────────────────────────────
-st.markdown('<div class="messages-area">', unsafe_allow_html=True)
+# ── Scrollable chat content ───────────────────────────────────
+st.markdown('<div class="main-content-pad">', unsafe_allow_html=True)
 
-# Expired session banner
+# Expired banner
 if not st.session_state.session_active:
     st.markdown("""
     <div class="expired-banner">
-      Session Expired - Your conversation memory has been cleared.<br>
-      Click <strong>New Session</strong> in the sidebar to start fresh.
+      Session Expired — Click <strong>New Session</strong> in the sidebar to start fresh.
     </div>
     """, unsafe_allow_html=True)
 
-# Welcome screen (shown only when chat is empty)
+# Welcome card (only when no messages)
 if not st.session_state.chat_history:
     st.markdown("""
     <div class="welcome-card">
@@ -671,8 +482,8 @@ if not st.session_state.chat_history:
       <div class="welcome-title">IT Career Guidance</div>
       <div class="welcome-by">✦ with Atheek Fareez ✦</div>
       <div class="welcome-desc">
-        Ask me anything about IT careers, internship tips, required skills,<br>
-        and roadmaps for AI, Software Engineering, Data Science & more.
+        Ask me anything about IT careers, internship tips,<br>
+        required skills and roadmaps for AI, SE, DS, CS and more.
       </div>
       <div class="suggestions">
         <span class="chip">🤖 How to become an AI developer?</span>
@@ -684,128 +495,100 @@ if not st.session_state.chat_history:
     </div>
     """, unsafe_allow_html=True)
 
-# Render full chat history as bubbles
+# Chat bubbles
 for msg in st.session_state.chat_history:
     ts = msg.get("ts", "")
     if msg["role"] == "user":
         st.markdown(f"""
         <div class="msg-row user">
-          <div>
-            <div class="avatar user-av">U</div>
-            <div class="msg-name">You</div>
-          </div>
+          <div><div class="avatar user-av">U</div><div class="msg-name">You</div></div>
           <div>
             <div class="bubble user-bubble">{msg["text"]}</div>
-            <div style="font-size:0.62rem;color:#94a3b8;text-align:right;margin-top:3px;">{ts}</div>
+            <div style="font-size:.62rem;color:#94a3b8;text-align:right;margin-top:3px;">{ts}</div>
           </div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="msg-row bot">
-          <div>
-            <div class="avatar bot-av">🤖</div>
-            <div class="msg-name">Bot</div>
-          </div>
+          <div><div class="avatar bot-av">🤖</div><div class="msg-name">Bot</div></div>
           <div>
             <div class="bubble bot-bubble">{msg["text"]}</div>
-            <div style="font-size:0.62rem;color:#94a3b8;margin-top:3px;">{ts}</div>
+            <div style="font-size:.62rem;color:#94a3b8;margin-top:3px;">{ts}</div>
           </div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
 
-# Thinking indicator
+# Thinking dots
 if st.session_state.thinking:
     st.markdown("""
     <div class="msg-row bot">
-      <div>
-        <div class="avatar bot-av">🤖</div>
-        <div class="msg-name">Bot</div>
-      </div>
-      <div class="thinking">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+      <div><div class="avatar bot-av">🤖</div><div class="msg-name">Bot</div></div>
+      <div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>""", unsafe_allow_html=True)
 
 # Error message
 if st.session_state.error_msg:
     st.markdown(f'<div class="msg-warn">⚠️ {st.session_state.error_msg}</div>',
                 unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)  # close messages-area
+st.markdown('</div>', unsafe_allow_html=True)  # close main-content-pad
 
 
-# ── Fixed bottom input bar ────────────────────────────────────
-st.markdown('<div class="input-bar-wrap">', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════
+# PINNED INPUT BAR — position:fixed, always at bottom
+# ══════════════════════════════════════════════════════════════
+st.markdown('<div class="pinned-input"><div class="pinned-input-inner">', unsafe_allow_html=True)
 
-col_input, col_btn = st.columns([5, 1])
-
-with col_input:
+col_in, col_btn = st.columns([6, 1])
+with col_in:
     user_input = st.text_area(
-        label="Message",
+        label="msg",
         label_visibility="collapsed",
         placeholder="Ask me about IT careers, skills, internships...",
-        height=56,
+        height=52,
         key=f"chat_input_{st.session_state.input_key}",
     )
-
 with col_btn:
     send_clicked = st.button("Send ➤", use_container_width=True)
 
-st.markdown('</div>', unsafe_allow_html=True)  # close input-bar-wrap
-st.markdown('</div>', unsafe_allow_html=True)  # close chat-wrapper
+st.markdown('</div></div>', unsafe_allow_html=True)
 
 
-# -- Handle send -----------------------------------------------
+# ── Handle send ───────────────────────────────────────────────
 if send_clicked:
     if not user_input.strip():
         st.session_state.error_msg = "Please type a message before sending."
         st.rerun()
     elif not st.session_state.session_active:
-        st.session_state.error_msg = "Session expired. Click New Session in the sidebar to continue."
+        st.session_state.error_msg = "Session expired. Click New Session in the sidebar."
         st.rerun()
     else:
         elapsed   = datetime.now() - st.session_state.session_start
         limit_sec = st.session_state.session_mins * 60
         if elapsed.total_seconds() >= limit_sec:
             st.session_state.session_active = False
-            st.session_state.error_msg = "Session expired. Click New Session in the sidebar to continue."
+            st.session_state.error_msg = "Session expired. Click New Session in the sidebar."
             st.rerun()
+
         now_ts = datetime.now().strftime("%H:%M")
-        st.session_state.chat_history.append({
-            "role": "user",
-            "text": user_input.strip(),
-            "ts"  : now_ts,
-        })
-        st.session_state.gemini_history.append({
-            "role" : "user",
-            "parts": [{"text": user_input.strip()}],
-        })
-        st.session_state.error_msg = None
-        st.session_state.thinking  = True
+        st.session_state.chat_history.append({"role":"user","text":user_input.strip(),"ts":now_ts})
+        st.session_state.gemini_history.append({"role":"user","parts":[{"text":user_input.strip()}]})
+        st.session_state.error_msg  = None
+        st.session_state.thinking   = True
         st.session_state.input_key += 1
         st.rerun()
 
-# -- Process AI response (runs when thinking=True) ---------------
+# ── Process AI response ───────────────────────────────────────
 if st.session_state.thinking:
     try:
-        answer = ask_gemini(system_prompt, st.session_state.gemini_history)
+        answer       = ask_gemini(system_prompt, st.session_state.gemini_history)
         answer_clean = re.sub(r'\n{3,}', '\n\n', answer.strip())
-        now_ts = datetime.now().strftime("%H:%M")
-        st.session_state.chat_history.append({
-            "role": "bot",
-            "text": answer_clean,
-            "ts"  : now_ts,
-        })
-        st.session_state.gemini_history.append({
-            "role" : "model",
-            "parts": [{"text": answer_clean}],
-        })
+        now_ts       = datetime.now().strftime("%H:%M")
+        st.session_state.chat_history.append({"role":"bot","text":answer_clean,"ts":now_ts})
+        st.session_state.gemini_history.append({"role":"model","parts":[{"text":answer_clean}]})
         st.session_state.error_msg = None
     except Exception as e:
         error_text = str(e)
-        if any(k in error_text.lower() for k in ["429", "quota", "rate", "resource_exhausted"]):
+        if any(k in error_text.lower() for k in ["429","quota","rate","resource_exhausted"]):
             st.session_state.error_msg = "Too many requests. Please wait a few seconds and try again."
         else:
             st.session_state.error_msg = f"API Error: {error_text}"
